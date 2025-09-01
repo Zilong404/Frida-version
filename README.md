@@ -56,26 +56,6 @@ PC 端（Windows）
 
 ---
 
-3. 手机端脚本用法 (frida_auto_match.sh)
-
-📌 手动指定版本
-
-    sh frida_auto_match.sh 17.1.5
-
-📌 自动匹配（从 PC 端传入）
-
-    sh frida_auto_match.sh
-
-📌 杀旧进程再启动
-
-    sh frida_auto_match.sh 17.1.5 --kill
-
-📌 查看帮助
-
-    sh frida_auto_match.sh -h
-
----
-
 🧩 工作流程
 
 1. PC 端  
