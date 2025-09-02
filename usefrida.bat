@@ -1,21 +1,28 @@
 @echo off
 setlocal enabledelayedexpansion
 
-REM =========================
-REM 帮助信息
-REM =========================
+:: =========================
+:: 日志函数
+:: =========================
+:log
+set "LEVEL=%~1"
+set "MSG=%~2"
+for /f "tokens=1-3 delims=:.," %%a in ("%time%") do (
+    set "t=%%a:%%b:%%c"
+)
+echo [!date! !t!] [%LEVEL%] %MSG%
+exit /b
+
+:: =========================
+:: 帮助信息
+:: =========================
 if "%~1"=="" goto :help
 if "%~1"=="-h" goto :help
 if "%~1"=="--help" goto :help
 
-REM =========================
-REM 参数解析
-REM 支持：
-REM   usefrida.bat -Version 17.1.5 [--kill]
-REM   usefrida.bat -Env frida17 [--kill]
-REM   usefrida.bat               （自动检测当前环境版本）
-REM =========================
-
+:: =========================
+:: 参数解析
+:: =========================
 set "VERSION="
 set "ENVNAME="
 set "KILL="
@@ -31,7 +38,7 @@ if "%~1"=="-Version" (
 ) else if "%~1"=="--kill" (
     set "KILL=--kill"
 ) else (
-    echo [!] 未知参数 %~1
+    call :log ERROR "未知参数 %~1"
     goto :help
 )
 shift
@@ -39,60 +46,67 @@ goto :parse
 
 :done_parse
 
-REM =========================
-REM 选择虚拟环境
-REM =========================
+:: =========================
+:: 选择虚拟环境
+:: =========================
 if defined VERSION (
     set "EnvName=frida-%VERSION%"
 ) else if defined ENVNAME (
     set "EnvName=%ENVNAME%"
 ) else (
-    echo [*] 未指定 Version 或 Env，将使用当前环境...
+    call :log INFO "未指定 Version 或 Env，将使用当前环境..."
     goto :detect_version
 )
 
-echo [*] 准备切换到虚拟环境: %EnvName%
+call :log INFO "准备切换到虚拟环境: %EnvName%"
 
-REM 检查虚拟环境是否存在
+:: 检查虚拟环境是否存在
+set "FOUND="
 for /f "tokens=*" %%i in ('workon') do (
     if "%%i"=="%EnvName%" set "FOUND=1"
 )
 if not defined FOUND (
-    echo [!] 未找到虚拟环境 %EnvName%
+    call :log ERROR "未找到虚拟环境 %EnvName%"
     echo     请先运行：
     echo       mkvirtualenv %EnvName%
     if defined VERSION echo       pip install frida-tools==%VERSION%
-    exit /b 1
+    goto :end
 )
 
-REM 切换到虚拟环境
+:: 切换到虚拟环境
 workon %EnvName%
 
 :detect_version
-REM =========================
-REM 检测 frida-tools 版本
-REM =========================
+:: =========================
+:: 检测 frida-tools 版本
+:: =========================
+set "VERSION="
 for /f "tokens=2 delims=: " %%i in ('pip show frida-tools ^| findstr /I "Version"') do (
     set "VERSION=%%i"
 )
 
 if not defined VERSION (
-    echo [!] 未检测到 frida-tools，请检查环境
-    exit /b 1
+    call :log ERROR "未检测到 frida-tools，请检查环境"
+    goto :end
 )
 
-echo [*] 使用 frida-tools 版本: %VERSION%
+call :log INFO "使用 frida-tools 版本: %VERSION%"
 
-REM =========================
-REM 调用 frida_auto_match.sh
-REM =========================
+:: =========================
+:: 调用 frida_auto_match.sh
+:: =========================
 set "cmd=sh /data/local/tmp/frida_auto_match.sh %VERSION% %KILL%"
 
-echo [*] 执行: adb shell %cmd%
+call :log INFO "执行: adb shell %cmd%"
 adb shell %cmd%
 
-echo [*] ✅ Frida 环境 + 服务端已就绪
-exit /b 0
+if %errorlevel% neq 0 (
+    call :log ERROR "adb 执行失败，请检查连接和脚本"
+    goto :end
+)
+
+call :log INFO "✅ Frida 环境 + 服务端已就绪"
+goto :end
 
 
 :help
@@ -107,4 +121,8 @@ echo   usefrida.bat -Version 16.1.0
 echo   usefrida.bat -Version 17.1.5 --kill
 echo   usefrida.bat -Env frida17
 echo   usefrida.bat --kill
+
+:end
+echo.
+pause
 exit /b 0
