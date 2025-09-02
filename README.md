@@ -105,5 +105,17 @@ PC 端（Windows）
     └─ ...
 
 ---
+使用
+
+激活空间
+
+	workon 空间名称
+
+测试连接
+
+	frida-ps -U
+
+<img width="981" height="167" alt="image" src="https://github.com/user-attachments/assets/f7911f19-ef2f-4e3b-a1f5-aadf553db627" />
+
 
 
