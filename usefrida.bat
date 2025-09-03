@@ -1,58 +1,56 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: =====================================================
-:: usefrida.bat - 一键启动 Frida Server (仅手机端)
-:: 支持命令：
-::   usefrida.bat               -> 部署/启动手机端 frida-server
-::   usefrida.bat --kill        -> 杀掉旧进程并重启
-::   usefrida.bat --status      -> 检查手机端 frida-server 状态
-:: =====================================================
+set "ARGS="
+set "TARGET_ENV="
+set "FRIDA_VER="
 
-:log
-set "LEVEL=%~1"
-set "MSG=%~2"
-for /f "tokens=1-3 delims=:.," %%a in ("%time%") do (
-    set "t=%%a:%%b:%%c"
+:parse
+if "%~1"=="" goto done
+if /I "%~1"=="-Version" (
+    set "FRIDA_VER=%2"
+    shift
+) else if /I "%~1"=="-Env" (
+    set "TARGET_ENV=%2"
+    shift
+) else (
+    set "ARGS=!ARGS! %1"
 )
-echo [%date% !t!] [%LEVEL%] %MSG%
-exit /b
+shift
+goto parse
+:done
 
-:: ================== STEP 1: 参数解析 ==================
-set ACTION=start
-set KILL_FLAG=
-
-if "%~1"=="--kill" (
-    set ACTION=start
-    set KILL_FLAG=--kill
-)
-if "%~1"=="--status" (
-    set ACTION=status
-)
-
-:: ================== STEP 2: 推送脚本 (非 status 模式) ==================
-if "%ACTION%"=="start" (
-    call :log INFO "推送 frida_auto_match.sh 到手机..."
-    adb push device/frida_auto_match.sh /data/local/tmp/ >nul
-    adb shell chmod +x /data/local/tmp/frida_auto_match.sh
-
-    :: 默认版本号，可根据需要固定，比如 "16.5.2"
-    set FRIDA_VERSION=16.5.2
-
-    call :log INFO "执行手机端脚本，版本=%FRIDA_VERSION%，参数=%KILL_FLAG%"
-    adb shell "sh /data/local/tmp/frida_auto_match.sh %FRIDA_VERSION% %KILL_FLAG%"
-    call :log INFO "部署完成，查看日志: adb shell cat /data/local/tmp/frida.log"
-    exit /b
-)
-
-:: ================== STEP 3: 检查状态 ==================
-if "%ACTION%"=="status" (
-    call :log INFO "检查手机端 frida-server 状态..."
-    adb shell "ps -A | grep frida-server"
+:: 如果指定了 -Env，则先激活虚拟环境并探测版本号
+if not "%TARGET_ENV%"=="" (
+    echo [INFO] 激活虚拟环境: %TARGET_ENV%
+    call workon %TARGET_ENV%
     if errorlevel 1 (
-        call :log ERROR "frida-server 未在运行"
-    ) else (
-        call :log INFO "frida-server 正在运行"
+        echo [ERROR] 激活虚拟环境失败，请检查环境名是否正确
+        pause
+        exit /b 1
     )
-    exit /b
+
+    :: 在该虚拟环境下探测 frida 版本
+    for /f "delims=" %%v in ('frida --version') do set "FRIDA_VER=%%v"
+    echo [INFO] 环境 %TARGET_ENV% 内 frida 版本: %FRIDA_VER%
 )
+
+:: 如果既没有指定 -Env 也没有 -Version，则自动探测当前环境版本
+if "%FRIDA_VER%"=="" (
+    for /f "delims=" %%v in ('frida --version') do set "FRIDA_VER=%%v"
+    echo [INFO] 当前环境 frida 版本: %FRIDA_VER%
+)
+
+:: 拼接最终命令，调用 Android 端脚本
+echo [INFO] 调用 Android 脚本: /data/local/tmp/frida_auto_match.sh %FRIDA_VER% %ARGS%
+adb shell "sh /data/local/tmp/frida_auto_match.sh %FRIDA_VER% %ARGS%"
+
+if %errorlevel% neq 0 (
+    echo [ERROR] 在 Android 端执行失败
+    pause
+    exit /b 1
+)
+
+echo [INFO] ✅ frida-server 已 root 常驻
+pause
+exit /b 0
